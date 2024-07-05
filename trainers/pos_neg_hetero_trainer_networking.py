@@ -59,7 +59,7 @@ def init_master(cfg, hydra_output_dir):
     dist.init_process_group(backend='gloo', 
                             init_method=f'tcp://{addr}:{port}',
                             rank=0, world_size=cfg.num_partitions+1)
-    
+    print("Distributed setup initialized")
     # seed_everything(cfg.seed)
     
     node_emb_meta = {
