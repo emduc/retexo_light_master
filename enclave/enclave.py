@@ -4,7 +4,6 @@
 
 # // Code here is a simple reference and requires a running enclave and a complete image.
 
-import boto3
 import json
 import base64
 import socket
