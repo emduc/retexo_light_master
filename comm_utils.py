@@ -62,13 +62,13 @@ def get_cid():
     return enclave_cid
 
 
-def set_identity():
-    identity = get_identity_document()
-    region = get_region(identity)
-    account = get_account(identity)
-    return region, account
+# def set_identity():
+#     identity = get_identity_document()
+#     region = get_region(identity)
+#     account = get_account(identity)
+#     return region, account
 
-REGION, ACCOUNT = set_identity()
+# REGION, ACCOUNT = set_identity()
     
 class MultiThreadReducerCentralized:
     """Multi-threaded reducer for aggregating gradients in a centralized manner"""
