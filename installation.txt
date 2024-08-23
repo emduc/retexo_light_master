@@ -7,3 +7,5 @@ pip install scikit-learn
 pip install torchmetrics
 pip install torch_geometric
 pip install pydantic
+pip install boto3
+

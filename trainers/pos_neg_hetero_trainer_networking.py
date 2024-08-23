@@ -85,6 +85,8 @@ def init_master(cfg, hydra_output_dir):
         cfg.adaptor_hidden, cfg.hidden_dim, cfg.hidden_dim, cfg.hidden_dim, node_emb_meta, "cpu", cfg.num_layers, cfg.cross_score, cfg.dropout
     )
     
+    perf_stores = []
+    
     # oversee gradient aggregation
     for layer in range(len(cfg.num_rounds)):
         model = setup_model(global_model, layer, "cpu")
@@ -93,6 +95,25 @@ def init_master(cfg, hydra_output_dir):
         reducer = MultiThreadReducerCentralized(model=model, device=cfg.device) # TODO: add parameters and model
         
         print("Starting layer {}...".format(layer))
-        reducer.master_aggregate_gradients(cfg, layer)
+        reducer.master_aggregate_gradients(cfg, layer, perf_stores)
+        print("Gradients update finished.")
+        
+        for i, perf_store in enumerate(perf_stores):
+            print("Layer {}:".format(i))
+            print("Mean grad reduce time: {}".format(perf_store.get_mean_grad_reduce_times()))
+            print("Mean grad decryption time: {}".format(perf_store.get_mean_grad_decryption()))
+
+    
+        # print("Aggregating news embeddings from users...")
+        # reducer.master_aggregate_users(cfg)
+        
+        
+        print("News embeddings updated and sent.")
         print("Layer {} finished.".format(layer))
-     
+        
+
+    for i, perf_store in enumerate(perf_stores):
+        print("Layer {}:".format(i))
+        print("Mean grad reduce time: {}".format(perf_store.get_mean_grad_reduce_times()))
+        print("Mean grad decryption time: {}".format(perf_store.get_mean_grad_decryption()))
+

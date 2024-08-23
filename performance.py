@@ -20,7 +20,26 @@ class PerformanceStore:
         self._load_gpu_times = []
         self._cv_message_passing_t = 0
         self._cv_grad_reduce_t = 0
+        self._local_grad_encryption = []
+        self._grad_decryption = []
 
+
+    def add_grad_decryption(self, time_t: float):
+        """Add local grad encryption time"""
+        self._grad_decryption.append(time_t)
+        
+    def get_mean_grad_decryption(self):
+        """Get mean grad decryption time"""
+        return np.mean(self._grad_decryption)
+        
+    def get_mean_grad_encryption(self):  
+        """Get mean grad encryption time"""  
+        return np.mean(self._local_grad_encryption)
+    
+    def add_local_grad_encryption(self, time_t: float):
+        """Add local grad encryption time"""
+        self._local_grad_encryption.append(time_t)
+        
     def get_communication_volume(self):
         """Get communication volume"""
         return int(self._cv_grad_reduce_t + self._cv_message_passing_t)
@@ -44,6 +63,10 @@ class PerformanceStore:
     def get_grad_reduce_times(self):
         """Get grad reduce times"""
         return self._grad_reduce_times
+    
+    def get_mean_grad_reduce_times(self):
+        """Get grad reduce times"""
+        return np.mean(self._grad_reduce_times)
 
     def get_val_metric_reduce_times(self):
         """Get val metric reduce times"""
