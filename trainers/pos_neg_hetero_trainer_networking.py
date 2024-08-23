@@ -95,7 +95,7 @@ def init_master(cfg, hydra_output_dir):
         reducer = MultiThreadReducerCentralized(model=model, device=cfg.device) # TODO: add parameters and model
         
         print("Starting layer {}...".format(layer))
-        if cfg.enclage:
+        if cfg.enclave:
             reducer.master_aggregate_enclave(cfg, layer, perf_stores)
         else:
             reducer.master_aggregate_gradients(cfg, layer, perf_stores)
