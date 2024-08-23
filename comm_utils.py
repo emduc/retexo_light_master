@@ -100,18 +100,19 @@ class MultiThreadReducerCentralized:
         self.comm_vol_store = perf_store
         self.pubkey = pubkey
         
-        r = requests.get(
-            "http://169.254.169.254/latest/meta-data/iam/security-credentials/")
-        instance_profile_name = r.text
+        # Only if KMS is used        
+        # r = requests.get(
+        #     "http://169.254.169.254/latest/meta-data/iam/security-credentials/")
+        # instance_profile_name = r.text
 
-        r = requests.get(
-            "http://169.254.169.254/latest/meta-data/iam/security-credentials/%s" %
-            instance_profile_name)
-        response = r.json()
-        self.access_key_id = response['AccessKeyId']
-        self.secret_access_key = response['SecretAccessKey']
-        self.token = response['Token']
-        self.region = REGION
+        # r = requests.get(
+        #     "http://169.254.169.254/latest/meta-data/iam/security-credentials/%s" %
+        #     instance_profile_name)
+        # response = r.json()
+        # self.access_key_id = response['AccessKeyId']
+        # self.secret_access_key = response['SecretAccessKey']
+        # self.token = response['Token']
+        # self.region = REGION
         
         user_keys = None
         
