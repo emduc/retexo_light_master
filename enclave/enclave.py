@@ -114,37 +114,88 @@ def main():
 
     user_key = None
     s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+    
+    
     cid = socket.VMADDR_CID_ANY
-    port = 5000
+    port = 5003
+    
+    # If debugging locally uncomment:
+    cid = "127.0.0.1"
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
     s.bind((cid, port))
     s.listen()
     print(f"Started server on port {port} and cid {cid}")
-    decrypted_gradients = []
+    num_layers = 3
+    for _ in range(num_layers):
+        aggregate_layer(private_key, user_key, s)
+                
+
+
+def aggregate_layer(private_key, user_key, s):
+
     world_size = 1
-    total_rounds = 5
+    total_rounds = 1
     current_round = 0
     
+    metadata = None
+    aggr_times = []
+    decrypt_times = []
     
+    c, addr = s.accept()
+    print(f"Connection from {addr}")
 
     while True:
-        if len(decrypted_gradients) < world_size:
-            c, addr = s.accept()
-            payload = c.recv(4096)
-            r = {}
-            encrypted = json.loads(payload.decode())
-            
-            print("Received the tensors")
-            # Extract metadata
-            num_params = int.from_bytes(encrypted[:1], 'little')
-            metadata_size = 1 + num_params# * 4
-            indexes = np.frombuffer(encrypted[1:metadata_size], dtype=np.int32)
-            gradients_size = 100
+        decrypted_gradients = []
+        if metadata is None:
+            # Receive metadata on first round
+            metadata_json = b""
+            while True:
+                chunk = c.recv(1)
+                metadata_json += chunk
+                try:
+                    metadata = json.loads(metadata_json.decode())
+                    print("Received metadata:", metadata)
+                    world_size = metadata['num_clients']
+                    buffer_size = metadata['buffer_size']
+                    gradients_size = metadata['grad_size']
+                    total_rounds = metadata['total_rounds']
+                    break
+                except json.JSONDecodeError:
+                    # If we can't decode yet, we need more data
+                    continue
 
+        
+        # Receive gradients
+        if user_key is not None:
+            aggr_s = time.time()
+        else:
+            aggr_s = None
+        encrypted_gradients = []
+        for _ in range(world_size):
+            gradient_buffer = c.recv(buffer_size)
             
-            offset = metadata_size + gradients_size
-            iv = encrypted[offset:offset+4].tobytes()
-            encrypted_key = encrypted[offset+4:offset+68].tobytes()
-            encrypted_grads = encrypted[metadata_size:offset]
+            # If we didn't get all the data, keep receiving
+            while len(gradient_buffer) < buffer_size:
+                remaining = buffer_size - len(gradient_buffer)
+                chunk = c.recv(remaining)
+                if not chunk:
+                    raise ConnectionError("Connection closed before receiving full gradient")
+                gradient_buffer += chunk
+            
+            encrypted_gradients.append(gradient_buffer)
+        
+        # print("Received the tensors")
+        # Extract metadata
+        num_params = int.from_bytes(gradient_buffer[:1], 'little')
+        metadata_size = 1 + num_params# * 4
+        
+        for encrypted in encrypted_gradients:
+            offset = int(metadata_size + gradients_size)
+            gradient = np.frombuffer(encrypted, dtype=np.float32)
+            iv = gradient[offset:offset+4].tobytes()
+            encrypted_key = gradient[offset+4:offset+68].tobytes()
+            encrypted_grads = gradient[metadata_size:offset]
             
             if user_key is None:
                 priv_key_time_s = time.time()
@@ -166,28 +217,30 @@ def main():
             decrypted_bytes = decryptor.update(encrypted_grads.tobytes()) + decryptor.finalize()
             decrypted_array = np.frombuffer(decrypted_bytes, dtype=np.float32)
             decrypted_gradients.append(decrypted_array)
+            decrypt_time = time.time() - decrypt_time_s
+            decrypt_times.append(decrypt_time)
 
-        else:
-
-            tensor_sum = np.sum(decrypted_gradients)
-
-            r["tensor_sum"] = tensor_sum.item()
-            print(tensor_sum.item())
-            print(json.dumps(r))
-            print(str.encode(json.dumps(r)))
-            
-            
-            try:
-                c.send(str.encode(json.dumps(r)))
-            except BrokenPipeError as e:
-                print(f"Error sending data: {e}")
-            finally:
-                c.close()
-                
-            current_round += 1
-            if total_rounds == current_round:
-                break
-                
+        tensor_sum = np.sum(decrypted_gradients, axis=0)
+        buffer = tensor_sum.tobytes()
+        # print(len(buffer))
+        try:
+            c.sendall(buffer)
+        except BrokenPipeError as e:
+            print(f"Error sending data: {e}")
+        
+        if aggr_s is not None:
+            aggr_time = time.time() - aggr_s 
+            aggr_times.append(aggr_time)    
+        current_round += 1
+        if total_rounds == current_round:
+            break
+        
+    c.close()
+    
+    print("Mean aggregation time: ", np.mean(aggr_times))
+    print("Mean symmetric decryption time: ", np.mean(decrypt_times))
+    
+    return 
             
 
 if __name__ == '__main__':

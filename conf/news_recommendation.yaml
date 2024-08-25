@@ -2,7 +2,7 @@
 
 app: "hetero_pos_neg_train" # hetero_pos_neg_train, partition_data
 retexo: true
-enclave: false
+enclave: true
 custom_note: "none"
 dataset_name: "mind"
 mind_version: "small"

@@ -132,6 +132,8 @@ class MultiThreadReducerCentralized:
         """Aggregate encrypted gradients directly on the master node"""
         world_size = cfg.num_partitions + 1
         
+
+
         all_grads = []
         num_elements = []
         shapes = []
@@ -179,6 +181,7 @@ class MultiThreadReducerCentralized:
                     if i in indexes:
                         gradients_size += param.numel()
                 
+                # print("grad size = ", gradients_size)
                 offset = metadata_size + gradients_size
                 iv = encrypted[offset:offset+4].tobytes()
                 encrypted_key = encrypted[offset+4:offset+68].tobytes()
@@ -235,7 +238,8 @@ class MultiThreadReducerCentralized:
     def master_aggregate_enclave(self, cfg, layer, perf_stores):
         """Aggregate the gradients on the master node"""
         world_size = cfg.num_partitions + 1
-        
+
+                
         all_grads = []
         num_elements = []
         shapes = []
@@ -258,8 +262,21 @@ class MultiThreadReducerCentralized:
         # if self.user_keys is None:
         self.user_keys = [None for _ in range(1, cfg.num_partitions + 1)]
         
+        s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+        # cid = get_cid()
+        port = 5003
+        
+        # If debugging locaaly:
+        cid = "127.0.0.1"
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        s.connect((cid, port))
+        send_metadata = True
+
+            
         for round in range(cfg.num_rounds[layer]):
             aggr_time_s = time.time()
+            print("Round: ", round)
             
             encrypted_list = []
             for _ in range(1, world_size):  # Exclude master itself
@@ -268,26 +285,52 @@ class MultiThreadReducerCentralized:
                 
                 # Adjust the size as needed
                 dist.recv(encrypted_grads_iv_key, src=_, tag=round)
-                encrypted_list.append(encrypted_grads_iv_key.numpy())
+                encrypted_list.append(encrypted_grads_iv_key.numpy().tobytes())
+
                 
-            # Just for convenience of gradient indexes 
-            for index, encrypted in zip(range(len(encrypted_list)), encrypted_list):
-                # Extract metadata
-                num_params = int.from_bytes(encrypted[:1], 'little')
-                metadata_size = 1 + num_params# * 4
-                indexes = np.frombuffer(encrypted[1:metadata_size], dtype=np.int32)
                 
-            s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
-            cid = get_cid()
-            port = 5000
+            # First round send all metadata: # of clients and buffer sizes
+            if send_metadata:
+                # Just for convenience of gradient indexes 
+                for index, encrypted in zip(range(len(encrypted_list)), encrypted_list):
+                    # Extract metadata
+                    num_params = int.from_bytes(encrypted[:1], 'little')
+                    metadata_size = 1 + num_params * 4
+                    indexes = np.frombuffer(encrypted[1:metadata_size], dtype=np.dtype('>i4'))
+                    
+                gradients_size = 0
+                for i in range(len(num_elements)):
+                    if i in indexes:
+                        gradients_size += num_elements[i]
+                metadata = {
+                    'num_clients': cfg.num_partitions,
+                    'buffer_size': len(encrypted_list[0]),
+                    'grad_size': gradients_size,
+                    'total_rounds': cfg.num_rounds[layer]
+                }
+                
+                metadata = str.encode(json.dumps(metadata))
+                s.send(metadata)
+                send_metadata = False
             
-            s.connect((cid, port))
+            print("Sending the tensors")
+            for gradient_buffer in encrypted_list:
+                s.sendall(gradient_buffer)
+                
+                
+            buffer_size = gradients_size * 4
+            r = s.recv(buffer_size)
             
-            ciphertext = json.dumps(encrypted_list)
-            s.send(str.encode(json.dumps(ciphertext)))
-            r = s.recv(self.model.grad_size).decode()
-            parsed = json.loads(r)
-            decrypted_gradient = np.array(parsed)
+            # If we didn't get all the data, keep receiving
+            while len(r) < buffer_size:
+                remaining = (buffer_size) - len(r)
+                chunk = s.recv(remaining)
+                if not chunk:
+                    raise ConnectionError("Connection closed before receiving full gradient")
+                r += chunk
+            
+            # parsed = json.loads(r)
+            decrypted_gradient = np.frombuffer(r, dtype=np.float32)
 
             # Convert aggregated gradients back to tensor and set to param.grad
             start = 0
