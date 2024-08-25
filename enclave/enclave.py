@@ -120,8 +120,8 @@ def main():
     port = 5003
     
     # If debugging locally uncomment:
-    cid = "127.0.0.1"
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # cid = "127.0.0.1"
+    # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     s.bind((cid, port))
     s.listen()

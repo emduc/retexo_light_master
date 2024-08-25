@@ -263,12 +263,12 @@ class MultiThreadReducerCentralized:
         self.user_keys = [None for _ in range(1, cfg.num_partitions + 1)]
         
         s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
-        # cid = get_cid()
+        cid = get_cid()
         port = 5003
         
         # If debugging locaaly:
-        cid = "127.0.0.1"
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # cid = "127.0.0.1"
+        # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
         s.connect((cid, port))
         send_metadata = True
