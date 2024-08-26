@@ -237,8 +237,8 @@ def aggregate_layer(private_key, user_key, s):
         
     c.close()
     
-    print("Mean aggregation time: ", np.mean(aggr_times))
-    print("Mean symmetric decryption time: ", np.mean(decrypt_times))
+    print(f"Mean aggregation time: {np.mean(aggr_times)} STD: {np.std(aggr_times)}") 
+    print(f"Mean symmetric decryption time:  {np.mean(decrypt_times)} STD: {np.std(decrypt_times)}")
     
     return 
             
