@@ -276,7 +276,7 @@ class MultiThreadReducerCentralized:
             
         for round in range(cfg.num_rounds[layer]):
             aggr_time_s = time.time()
-            print("Round: ", round)
+            # print("Round: ", round)
             
             encrypted_list = []
             for _ in range(1, world_size):  # Exclude master itself
@@ -313,7 +313,7 @@ class MultiThreadReducerCentralized:
                 s.send(metadata)
                 send_metadata = False
             
-            print("Sending the tensors")
+            # print("Sending the tensors")
             for gradient_buffer in encrypted_list:
                 s.sendall(gradient_buffer)
                 
