@@ -64,8 +64,13 @@ class PerformanceStore:
         """Get grad reduce times"""
         return self._grad_reduce_times
     
+    def get_std_grad_reduce_times(self):
+        """Get std grad reduce times"""
+        return np.std(self._grad_reduce_times)
+        
+    
     def get_mean_grad_reduce_times(self):
-        """Get grad reduce times"""
+        """Get mean grad reduce times"""
         return np.mean(self._grad_reduce_times)
 
     def get_val_metric_reduce_times(self):

@@ -100,6 +100,7 @@ class MultiThreadReducerCentralized:
         self.comm_vol_store = perf_store
         self.pubkey = pubkey
         
+        self.first_run = True
         # Only if KMS is used        
         # r = requests.get(
         #     "http://169.254.169.254/latest/meta-data/iam/security-credentials/")
@@ -124,10 +125,88 @@ class MultiThreadReducerCentralized:
                 backend=default_backend()
             )
             
+            
     def master_aggregate_plain(self, cfg, layer, perf_stores):
         """Aggregate plantext gradients on the master node"""
         world_size = cfg.num_partitions + 1
         
+        all_grads = []
+        num_elements = []
+        shapes = []
+        
+        perf_store = PerformanceStore()
+        perf_stores.append(perf_store)
+
+    
+        # with torch.no_grad():
+        for _, (name, param) in enumerate(self.model.named_parameters()):
+            all_grads.append(torch.zeros_like(param).cpu().numpy())
+            shapes.append(param.shape)
+            num_elements.append(param.numel())
+    
+        all_grads_array = np.concatenate([grad.flatten() for grad in all_grads])
+        target_tensor = torch.tensor(np.frombuffer(all_grads_array.tobytes(), dtype=np.float32))
+        
+        
+        for round in range(cfg.num_rounds[layer]):
+            indexes_grads = []
+            for _ in range(1, world_size):  # Exclude master itself
+                # Placeholder tensor for gathering encrypted gradients
+                i_g = torch.zeros(target_tensor.shape[0], dtype=torch.float32)  
+                
+                # Adjust the size as needed
+                dist.recv(i_g, src=_, tag=round)
+                indexes_grads.append(i_g.numpy())
+                
+            aggr_time_s = time.time()
+              
+            gradients = []
+            for index, g_i in zip(range(len(indexes_grads)), indexes_grads):
+                # Extract metadata
+                num_params = int.from_bytes(g_i[:1], 'little')
+                metadata_size = 1 + num_params# * 4
+                indexes = np.frombuffer(g_i[1:metadata_size], dtype=np.int32)
+                
+                gradients_size = 0
+                for i, (name, param) in enumerate(self.model.named_parameters()):
+                    if i in indexes:
+                        gradients_size += param.numel()
+                
+                # print("grad size = ", gradients_size)
+                offset = metadata_size + gradients_size
+                grads_bytes = g_i[metadata_size:offset]
+
+                grad = np.frombuffer(grads_bytes, dtype=np.float32)
+                gradients.append(grad)
+                
+            # Aggregate decrypted gradients
+            aggregated_grads = np.sum(gradients, axis=0) / world_size
+
+            # Convert aggregated gradients back to tensor and set to param.grad
+            start = 0
+            # i = 0
+            index = 0
+            for param in self.model.parameters():
+                if index in indexes:
+                    grad_array = aggregated_grads[start:start + param.numel()].reshape(param.shape)
+                    param.grad = torch.tensor(grad_array).view(param.shape)
+                    start += param.numel()
+                    # i += 1
+                index+=1
+
+
+            # Broadcast the aggregated gradients from rank 0 to all workers
+            for (name, param) in self.model.named_parameters():
+                if param.grad is not None:
+                    dist.broadcast(param.grad, src=0)
+                    
+            aggr_time = time.time() - aggr_time_s
+            if self.first_run:
+                self.first_run = False
+            else:
+                perf_store.add_grad_reduce_time(aggr_time)
+            
+            
     def master_aggregate_gradients(self, cfg, layer, perf_stores):
         """Aggregate encrypted gradients directly on the master node"""
         world_size = cfg.num_partitions + 1

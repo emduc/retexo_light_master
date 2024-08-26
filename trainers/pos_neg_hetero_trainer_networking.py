@@ -98,12 +98,13 @@ def init_master(cfg, hydra_output_dir):
         if cfg.enclave:
             reducer.master_aggregate_enclave(cfg, layer, perf_stores)
         else:
-            reducer.master_aggregate_gradients(cfg, layer, perf_stores)
+            # reducer.master_aggregate_gradients(cfg, layer, perf_stores)
+            reducer.master_aggregate_plain(cfg, layer, perf_stores)
         print("Gradients update finished.")
         
         for i, perf_store in enumerate(perf_stores):
             print("Layer {}:".format(i))
-            print("Mean grad reduce time: {}".format(perf_store.get_mean_grad_reduce_times()))
+            print("Mean grad reduce time: {} STD: {}".format(perf_store.get_mean_grad_reduce_times(), perf_store.get_std_grad_reduce_times()))
             print("Mean grad decryption time: {}".format(perf_store.get_mean_grad_decryption()))
 
     
