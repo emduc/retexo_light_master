@@ -93,11 +93,11 @@ class NewsSAGEModel(BaseGNN):
         }).to(device)
         
         # Attention layer
-        self.attention_layer = nn.MultiheadAttention(embed_dim=768, num_heads=1, batch_first=True)
-        self.projection_layer = nn.Linear(768, hidden_dim)
+        self.attention_layer = nn.MultiheadAttention(embed_dim=384, num_heads=1, batch_first=True)
+        self.projection_layer = nn.Linear(384, hidden_dim)
         
         self.projection_layer = nn.ModuleDict({
-            node_type: nn.Linear(768, hidden_dim)
+            node_type: nn.Linear(384, hidden_dim)
             for node_type in emb_data
         })
         
